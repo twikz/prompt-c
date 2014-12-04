@@ -1,7 +1,7 @@
 prompt-c
 ========
 
-easy-to-use c library for prompt
+lightweight gnu readline alternative written in c
 
 Copyright (c) 2014, Kristof Hannemann
 
