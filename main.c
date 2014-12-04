@@ -30,14 +30,14 @@ int main(int argc, const char * argv[]) {
     do {
         
         prompt_clear(&pt);
-
         result=prompt(&pt,"shell> ");
         
         if (result!=NULL) {
-            
             prompt_addhistory(&pt,result);
             system(result);
         }
+        else
+            continue; //no probs with strcmp
         
     } while (strcmp(result,"exit"));
     

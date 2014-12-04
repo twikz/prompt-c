@@ -54,7 +54,6 @@ static char *removechar(char *str, unsigned long pos) {
 #define ESC_SEQ_LEFT    "\x1b[D"
 #define ESC_SEQ_LEFT_N  "\x1b[%uD"
 #define ESC_SEQ_ERASE   "\x1b[J"
-
 #define ESC_SEQ_BELL    "\a"
 
 #define BUFFERSIZE 8
@@ -72,6 +71,8 @@ void prompt_init(prompt_t *pt) {
     pt->outstream = stdout;
     pt->curpos = 0;
     pt->histpos = pt->histsize;
+    pt->history_tmp = malloc((pt->histsize+1)*sizeof(char*));
+    memset(pt->history_tmp,0,(pt->histsize+1)*sizeof(char*));
 }
 
 void prompt_destroy(prompt_t *pt) {
@@ -80,6 +81,9 @@ void prompt_destroy(prompt_t *pt) {
         free(pt->history[i]);
     }
     free(pt->history);
+    for (i=0; i<(pt->histsize+1); i++)
+        free(pt->history_tmp[i]);
+    free(pt->history_tmp);
     free(pt->buffer);
 }
 
@@ -97,6 +101,20 @@ void prompt_addhistory(prompt_t *pt, char *entry) {
     pt->history=realloc(pt->history,pt->histsize*sizeof(char*));
     pt->history[pt->histsize-1]=malloc((strlen(pt->buffer)+1)*sizeof(char));
     strcpy(pt->history[pt->histsize-1], pt->buffer);
+    pt->history_tmp=realloc(pt->history_tmp ,(pt->histsize+1)*sizeof(char*));
+    pt->history_tmp[pt->histsize]=pt->history_tmp[pt->histsize-1]; //swap
+    pt->history_tmp[pt->histsize-1]=malloc((strlen(pt->buffer)+1)*sizeof(char));
+    strcpy(pt->history_tmp[pt->histsize-1], pt->buffer);
+}
+
+void prompt_clear(prompt_t *pt) {
+    unsigned long i;
+    memset(pt->buffer, 0, pt->buffsize);
+    pt->curpos=0;
+    pt->histpos=pt->histsize;
+    for (i=0; i<(pt->histsize+1); i++)
+        free(pt->history_tmp[i]);
+    memset(pt->history_tmp, 0, (pt->histsize+1)*sizeof(char*));
 }
 
 #define clrws(__ws)  do { \
@@ -109,17 +127,13 @@ void prompt_addhistory(prompt_t *pt, char *entry) {
 char * prompt(prompt_t *pt, char *label) {
     struct termios oldterm, newterm;
     char ch;
-    char *buffer = pt->buffer, **history=pt->history, **history_tmp;
+    char *buffer = pt->buffer, **history=pt->history, **history_tmp=pt->history_tmp;
     unsigned long curpos=pt->curpos,len=strlen(buffer), histpos=pt->histpos;
     unsigned long buffsize=pt->buffsize, histsize=pt->histsize;
     FILE *instream=pt->instream, *outstream=pt->outstream;
-    unsigned long i;
     struct winsize ws;
     
     pt->label=(label!=NULL)? label : pt->label;
-    
-    history_tmp = malloc((histsize+1)*sizeof(char*));
-    memset(history_tmp,0,(histsize+1)*sizeof(char*));
     
     fprintf(outstream, "%s%s", pt->label, buffer);
     if ((len-curpos) > 0)
@@ -129,7 +143,6 @@ char * prompt(prompt_t *pt, char *label) {
     newterm = oldterm;
     newterm.c_lflag &= (~ICANON)&(~ECHO);
     tcsetattr(fileno(instream), TCSANOW, &newterm);
-
 
     for (; ; ) {
         ch = fgetc(instream);
@@ -163,7 +176,7 @@ char * prompt(prompt_t *pt, char *label) {
                         
                         history_tmp[histpos] = realloc(history_tmp[histpos], (strlen(buffer)+1)*sizeof(char));
                         strcpy(history_tmp[histpos], buffer);
-                        strcpy(buffer,history_tmp[histpos+1]? history_tmp[histpos+1] : history[histpos+1]);
+                        strcpy(buffer,history_tmp[histpos+1]? history_tmp[histpos+1] : history[histpos+1]); //segfault
 
 
                         histpos++;
@@ -244,18 +257,16 @@ char * prompt(prompt_t *pt, char *label) {
     }
     while ((ch!='\n')&&(ch!='\r'));
 
-
     buffer[len]='\0'; //safety
-
-    for(i=0;i<histsize+1;i++)
-        free(history_tmp[i]);
-    free(history_tmp);
-
+    
+    history_tmp[histpos] = realloc(history_tmp[histpos], (strlen(buffer)+1)*sizeof(char));
+    strcpy(history_tmp[histpos], buffer);
 
     pt->buffer=buffer;
     pt->buffsize=buffsize;
     pt->curpos=curpos;
     pt->histpos=histpos;
+    pt->history_tmp=history_tmp;
 
     fprintf(outstream, "\n\r");
     
