@@ -91,6 +91,13 @@ void prompt_setinput(prompt_t *pt, char *input) {
     pt->curpos=len;
 }
 
+void prompt_addhistory(prompt_t *pt, char *entry) {
+    pt->history_size++;
+    pt->history=realloc(pt->history,pt->history_size*sizeof(char*));
+    pt->history[pt->history_size-1]=malloc((strlen(pt->buffer)+1)*sizeof(char));
+    strcpy(pt->history[pt->history_size-1], pt->buffer);
+}
+
 #define clrws(__ws)  do { \
                         __ws.ws_col=0; \
                         __ws.ws_row=0; \
@@ -98,7 +105,7 @@ void prompt_setinput(prompt_t *pt, char *input) {
                         __ws.ws_ypixel=0; \
                     } while(0)
 
-unsigned long prompt(prompt_t *pt) {
+char * prompt(prompt_t *pt, char *label) {
     struct termios oldterm, newterm;
     char ch;
     char *buffer = pt->buffer, **history=pt->history, **history_tmp;
@@ -107,6 +114,8 @@ unsigned long prompt(prompt_t *pt) {
     FILE *instream=pt->instream, *outstream=pt->outstream;
     unsigned long i;
     struct winsize ws;
+    
+    pt->label=(label!=NULL)? label : pt->label;
     
     history_tmp = malloc((history_size+1)*sizeof(char*));
     memset(history_tmp,0,(history_size+1)*sizeof(char*));
@@ -240,23 +249,16 @@ unsigned long prompt(prompt_t *pt) {
     for(i=0;i<history_size+1;i++)
         free(history_tmp[i]);
     free(history_tmp);
-    if (len) {
-        history_size++;
-        history=realloc(history,history_size*sizeof(char*));
-        history[history_size-1]=malloc((len+1)*sizeof(char));
-        strcpy(history[history_size-1], buffer);
-    }
+
 
     pt->buffer=buffer;
     pt->buffer_size=buffer_size;
-    pt->history=history;
-    pt->history_size=history_size;
     pt->curpos=curpos;
 
     fprintf(outstream, "\n\r");
     
     tcsetattr(fileno(instream), TCSANOW, &oldterm);
     
-    return len;
+    return ((len>0) ? buffer : NULL);
 }
 

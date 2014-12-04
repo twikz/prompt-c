@@ -44,9 +44,10 @@ prompt_t;
 #define prompt_setlabel(__pt, __label) (__pt)->label=__label
 #define prompt_getlabel(__pt) (__pt)->label
 
-extern unsigned long prompt(prompt_t *__pt);
+extern char * prompt(prompt_t *__pt, char *__label);
 extern void prompt_init(prompt_t *__pt);
 extern void prompt_destroy(prompt_t *__pt);
-extern void prompt_setinput(prompt_t *__pt, char *input);
+extern void prompt_setinput(prompt_t *__pt, char *__input);
+extern void prompt_addhistory(prompt_t *__pt, char *__entry);
 
 #endif // CMDLINEPROMPT_H
