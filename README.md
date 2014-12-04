@@ -1,8 +1,37 @@
-prompt-c
-========
+#prompt-c
 
-lightweight gnu readline alternative written in c
+##### A lightweight GNU readline alternative written in C
 
+- easy to compile
+- input history support
+- posix conform, works with Mac OS X, Linux and BSD
+- 2-Clause BSD License
+
+##Example
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "prompt.h"
+
+int main(int argc, const char * argv[]) {
+    prompt_t pt;
+
+    prompt_init(&pt);
+    prompt_setlabel(&pt, "shell> ");
+    do {
+        prompt_clear(&pt);
+        if (prompt(&pt))
+            system(prompt_getinput(&pt));
+    }
+    while (strcmp(prompt_getinput(&pt),"quit"));
+    prompt_destroy(&pt);
+    return 0;
+}
+```
+
+##License
 Copyright (c) 2014, Kristof Hannemann
 
 All rights reserved.
