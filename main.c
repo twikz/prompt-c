@@ -30,7 +30,7 @@ int main(int argc, const char * argv[]) {
     do {
         
         prompt_clear(&pt);
-        
+
         result=prompt(&pt,"shell> ");
         
         if (result!=NULL) {

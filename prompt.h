@@ -22,10 +22,11 @@
 
 typedef struct __prompt_t {
     char **history;
-    unsigned long history_size;
+    unsigned long histsize;
     char *buffer;
-    unsigned long buffer_size;
+    unsigned long buffsize;
     unsigned long curpos;
+    unsigned long histpos;
     char *label;
     FILE *instream;
     FILE *outstream;
@@ -34,8 +35,9 @@ prompt_t;
 
 
 #define prompt_clear(__pt)  do { \
-                                memset((__pt)->buffer, 0, (__pt)->buffer_size); \
+                                memset((__pt)->buffer, 0, (__pt)->buffsize); \
                                 (__pt)->curpos=0; \
+                                (__pt)->histpos=(__pt)->histsize; \
                             } while(0)
 
 #define prompt_getinput(__pt) (__pt)->buffer
@@ -43,6 +45,8 @@ prompt_t;
 #define prompt_getcursor(__pt) (__pt)->curpos
 #define prompt_setlabel(__pt, __label) (__pt)->label=__label
 #define prompt_getlabel(__pt) (__pt)->label
+#define prompt_sethistory(__pt, __histpos) (__pt)->histpos=__histpos
+#define prompt_gethistory(__pt) (__pt)->histpos
 
 extern char * prompt(prompt_t *__pt, char *__label);
 extern void prompt_init(prompt_t *__pt);

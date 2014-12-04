@@ -62,20 +62,21 @@ static char *removechar(char *str, unsigned long pos) {
 static char label[] = "> ";
 
 void prompt_init(prompt_t *pt) {
-    pt->buffer_size = BUFFERSIZE*sizeof(char);
-    pt->buffer = malloc(pt->buffer_size);
-    memset(pt->buffer, 0, pt->buffer_size);
+    pt->buffsize = BUFFERSIZE*sizeof(char);
+    pt->buffer = malloc(pt->buffsize);
+    memset(pt->buffer, 0, pt->buffsize);
     pt->history = NULL;
-    pt->history_size = 0;
+    pt->histsize = 0;
     pt->label = label;
     pt->instream = stdin;
     pt->outstream = stdout;
     pt->curpos = 0;
+    pt->histpos = pt->histsize;
 }
 
 void prompt_destroy(prompt_t *pt) {
     unsigned long i;
-    for (i=0; i<pt->history_size; i++) {
+    for (i=0; i<pt->histsize; i++) {
         free(pt->history[i]);
     }
     free(pt->history);
@@ -84,18 +85,18 @@ void prompt_destroy(prompt_t *pt) {
 
 void prompt_setinput(prompt_t *pt, char *input) {
     unsigned long len = strlen(input);
-    if ((len+1)>pt->buffer_size)
+    if ((len+1)>pt->buffsize)
         pt->buffer=realloc(pt->buffer, (len+1)*sizeof(char));
-    pt->buffer_size=(len+1)*sizeof(char);
+    pt->buffsize=(len+1)*sizeof(char);
     strcpy(pt->buffer, input);
     pt->curpos=len;
 }
 
 void prompt_addhistory(prompt_t *pt, char *entry) {
-    pt->history_size++;
-    pt->history=realloc(pt->history,pt->history_size*sizeof(char*));
-    pt->history[pt->history_size-1]=malloc((strlen(pt->buffer)+1)*sizeof(char));
-    strcpy(pt->history[pt->history_size-1], pt->buffer);
+    pt->histsize++;
+    pt->history=realloc(pt->history,pt->histsize*sizeof(char*));
+    pt->history[pt->histsize-1]=malloc((strlen(pt->buffer)+1)*sizeof(char));
+    strcpy(pt->history[pt->histsize-1], pt->buffer);
 }
 
 #define clrws(__ws)  do { \
@@ -109,16 +110,16 @@ char * prompt(prompt_t *pt, char *label) {
     struct termios oldterm, newterm;
     char ch;
     char *buffer = pt->buffer, **history=pt->history, **history_tmp;
-    unsigned long curpos=pt->curpos,len=strlen(buffer), histpos=pt->history_size;
-    unsigned long buffer_size=pt->buffer_size, history_size=pt->history_size;
+    unsigned long curpos=pt->curpos,len=strlen(buffer), histpos=pt->histpos;
+    unsigned long buffsize=pt->buffsize, histsize=pt->histsize;
     FILE *instream=pt->instream, *outstream=pt->outstream;
     unsigned long i;
     struct winsize ws;
     
     pt->label=(label!=NULL)? label : pt->label;
     
-    history_tmp = malloc((history_size+1)*sizeof(char*));
-    memset(history_tmp,0,(history_size+1)*sizeof(char*));
+    history_tmp = malloc((histsize+1)*sizeof(char*));
+    memset(history_tmp,0,(histsize+1)*sizeof(char*));
     
     fprintf(outstream, "%s%s", pt->label, buffer);
     if ((len-curpos) > 0)
@@ -155,7 +156,7 @@ char * prompt(prompt_t *pt, char *label) {
                         len=strlen(buffer);
                         break;
                     case 'B': //down
-                        if (histpos == history_size) {
+                        if (histpos == histsize) {
                             fprintf(outstream, ESC_SEQ_BELL);
                             break;
                         }
@@ -227,13 +228,13 @@ char * prompt(prompt_t *pt, char *label) {
         else if ((ch=='\n')||(ch=='\r'))
             break;
         else {
-            if ((len+1)>=buffer_size) {
-                buffer_size+=BUFFERSIZE*sizeof(char);
-                buffer=realloc(buffer,buffer_size);
+            if ((len+1)>=buffsize) {
+                buffsize+=BUFFERSIZE*sizeof(char);
+                buffer=realloc(buffer,buffsize);
             }
             curpos++;
             len++;
-            insertchar(buffer,ch,curpos-1,buffer_size);
+            insertchar(buffer,ch,curpos-1,buffsize);
             fprintf(outstream, "%s", buffer+curpos-1);
             if ((len-curpos)>0)
                 fprintf(outstream, ESC_SEQ_LEFT_N, (unsigned int)(len-curpos));
@@ -246,14 +247,15 @@ char * prompt(prompt_t *pt, char *label) {
 
     buffer[len]='\0'; //safety
 
-    for(i=0;i<history_size+1;i++)
+    for(i=0;i<histsize+1;i++)
         free(history_tmp[i]);
     free(history_tmp);
 
 
     pt->buffer=buffer;
-    pt->buffer_size=buffer_size;
+    pt->buffsize=buffsize;
     pt->curpos=curpos;
+    pt->histpos=histpos;
 
     fprintf(outstream, "\n\r");
     
