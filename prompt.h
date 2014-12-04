@@ -25,18 +25,28 @@ typedef struct __prompt_t {
     unsigned long history_size;
     char *buffer;
     unsigned long buffer_size;
-    char *prompttext;
+    unsigned long curpos;
+    char *label;
     FILE *instream;
     FILE *outstream;
 }
 prompt_t;
 
 
-#define prompt_clear(__pt) memset((__pt)->buffer, 0, (__pt)->buffer_size);
-#define prompt_get(__pt) (__pt)->buffer
+#define prompt_clear(__pt)  do { \
+                                memset((__pt)->buffer, 0, (__pt)->buffer_size); \
+                                (__pt)->curpos=0; \
+                            } while(0)
 
-extern unsigned long prompt(prompt_t *pt);
-extern void prompt_init(prompt_t *pt);
-extern void prompt_destroy(prompt_t *pt);
+#define prompt_getinput(__pt) (__pt)->buffer
+#define prompt_setcursor(__pt, __curspos) (__pt)->curpos=__curpos
+#define prompt_getcursor(__pt) (__pt)->curpos
+#define prompt_setlabel(__pt, __label) (__pt)->label=__label
+#define prompt_getlabel(__pt) (__pt)->label
+
+extern unsigned long prompt(prompt_t *__pt);
+extern void prompt_init(prompt_t *__pt);
+extern void prompt_destroy(prompt_t *__pt);
+extern void prompt_setinput(prompt_t *__pt, char *input);
 
 #endif // CMDLINEPROMPT_H

@@ -20,19 +20,8 @@
 #include <termios.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include "prompt.h"
-
-static inline void printsn(FILE *stream, const char *str, unsigned long times) {
-    while (times--)
-        fprintf(stream, "%s", str);
-}
-
-
-
-static inline void prints(FILE *stream, const char *str) {
-    fprintf(stream, "%s", str);
-}
-
 
 static char *insertchar(char *str, char ch, unsigned long pos, unsigned long size) {
     unsigned long i;
@@ -58,16 +47,19 @@ static char *removechar(char *str, unsigned long pos) {
     return str;
 }
 
-#define ESC_SEQ_UP
-#define ESC_SEQ_DOWN
+#define ESC_SEQ_UP      "\x1b[A"
+#define ESC_SEQ_DOWN    "\x1b[B"
 #define ESC_SEQ_RIGHT   "\x1b[C"
+#define ESC_SEQ_RIGHT_N "\x1b[%uC"
 #define ESC_SEQ_LEFT    "\x1b[D"
+#define ESC_SEQ_LEFT_N  "\x1b[%uD"
+#define ESC_SEQ_ERASE   "\x1b[J"
 
 #define ESC_SEQ_BELL    "\a"
 
 #define BUFFERSIZE 8
 
-static char prompttext[] = "> ";
+static char label[] = "> ";
 
 void prompt_init(prompt_t *pt) {
     pt->buffer_size = BUFFERSIZE*sizeof(char);
@@ -75,9 +67,10 @@ void prompt_init(prompt_t *pt) {
     memset(pt->buffer, 0, pt->buffer_size);
     pt->history = NULL;
     pt->history_size = 0;
-    pt->prompttext = prompttext;
+    pt->label = label;
     pt->instream = stdin;
     pt->outstream = stdout;
+    pt->curpos = 0;
 }
 
 void prompt_destroy(prompt_t *pt) {
@@ -89,29 +82,43 @@ void prompt_destroy(prompt_t *pt) {
     free(pt->buffer);
 }
 
+void prompt_setinput(prompt_t *pt, char *input) {
+    unsigned long len = strlen(input);
+    if ((len+1)>pt->buffer_size)
+        pt->buffer=realloc(pt->buffer, (len+1)*sizeof(char));
+    pt->buffer_size=(len+1)*sizeof(char);
+    strcpy(pt->buffer, input);
+    pt->curpos=len;
+}
+
+#define clrws(__ws)  do { \
+                        __ws.ws_col=0; \
+                        __ws.ws_row=0; \
+                        __ws.ws_xpixel=0; \
+                        __ws.ws_ypixel=0; \
+                    } while(0)
+
 unsigned long prompt(prompt_t *pt) {
     struct termios oldterm, newterm;
     char ch;
     char *buffer = pt->buffer, **history=pt->history, **history_tmp;
-    unsigned long curpos=strlen(buffer),len=strlen(buffer), histpos=pt->history_size;
+    unsigned long curpos=pt->curpos,len=strlen(buffer), histpos=pt->history_size;
     unsigned long buffer_size=pt->buffer_size, history_size=pt->history_size;
     FILE *instream=pt->instream, *outstream=pt->outstream;
-    int fninstream=fileno(instream);
     unsigned long i;
-
+    struct winsize ws;
+    
     history_tmp = malloc((history_size+1)*sizeof(char*));
     memset(history_tmp,0,(history_size+1)*sizeof(char*));
-    //for(i=0;i<history_size+1;i++)
-    //    history_tmp[i]=NULL;
+    
+    fprintf(outstream, "%s%s", pt->label, buffer);
+    if ((len-curpos) > 0)
+        fprintf(outstream, ESC_SEQ_LEFT_N, (unsigned int)(len-curpos));
 
-    prints(outstream, pt->prompttext);
-    if (len)
-        prints(outstream, buffer);
-
-    tcgetattr(fninstream, &oldterm);
+    tcgetattr(fileno(instream), &oldterm);
     newterm = oldterm;
     newterm.c_lflag &= (~ICANON)&(~ECHO);
-    tcsetattr(fninstream, TCSANOW, &newterm);
+    tcsetattr(fileno(instream), TCSANOW, &newterm);
 
 
     for (; ; ) {
@@ -122,63 +129,74 @@ unsigned long prompt(prompt_t *pt) {
                     
                     case 'A': //up
                         if (histpos == 0) {
-                            prints(outstream, ESC_SEQ_BELL);
+                            fprintf(outstream, ESC_SEQ_BELL);
                             break;
                         }
-                        //if (histpos==history_size) {
+                        
                         history_tmp[histpos] = realloc(history_tmp[histpos], (strlen(buffer)+1)*sizeof(char));
                         strcpy(history_tmp[histpos], buffer);
-
                         strcpy(buffer,history_tmp[histpos-1]? history_tmp[histpos-1] : history[histpos-1]);
 
                         histpos--;
-                        printsn(outstream, ESC_SEQ_LEFT, curpos);
-                        prints(outstream, buffer);
-                        //printsn(outstream, " ", (strlen(buffer)<len) ? strlen(buffer)-len : 0);
-                        if (strlen(buffer)<len) {
-                            printsn(outstream, " ", len - strlen(buffer));
-                            printsn(outstream, ESC_SEQ_LEFT, len - strlen(buffer));
-                        }
+                        if (curpos > 0)
+                            fprintf(outstream, ESC_SEQ_LEFT_N, (unsigned int)curpos);
+                        fprintf(outstream, "%s" ESC_SEQ_ERASE, buffer);
+                        
                         curpos=strlen(buffer);
                         len=strlen(buffer);
                         break;
                     case 'B': //down
                         if (histpos == history_size) {
-                            prints(outstream, ESC_SEQ_BELL);
+                            fprintf(outstream, ESC_SEQ_BELL);
                             break;
                         }
+                        
                         history_tmp[histpos] = realloc(history_tmp[histpos], (strlen(buffer)+1)*sizeof(char));
                         strcpy(history_tmp[histpos], buffer);
-
                         strcpy(buffer,history_tmp[histpos+1]? history_tmp[histpos+1] : history[histpos+1]);
 
 
                         histpos++;
-                        printsn(outstream, ESC_SEQ_LEFT, curpos);
-                        prints(outstream, buffer);
-                        //printsn(outstream, " ", (strlen(buffer)<len) ? len - strlen(buffer) : 0);
-                        if (strlen(buffer)<len) {
-                            printsn(outstream, " ", len - strlen(buffer));
-                            printsn(outstream, ESC_SEQ_LEFT, len - strlen(buffer));
-                        }
+                        if (curpos > 0)
+                            fprintf(outstream, ESC_SEQ_LEFT_N, (unsigned int)curpos);
+                        fprintf(outstream, "%s" ESC_SEQ_ERASE, buffer);
+                        
                         curpos=strlen(buffer);
                         len=strlen(buffer);
+                        
                         break;
                     case 'C': //right
                         if (curpos<len) {
+                            
                             curpos++;
-                            prints(outstream, ESC_SEQ_RIGHT);
+                            
+                            clrws(ws);
+                            ioctl(fileno(outstream), TIOCGWINSZ, &ws);
+                            if (((strlen(pt->label)+curpos)%ws.ws_col)==0)
+                                fprintf(outstream, ESC_SEQ_LEFT_N ESC_SEQ_DOWN,ws.ws_col-1);
+                            else
+                                fprintf(outstream, ESC_SEQ_RIGHT);
                         }
                         else
-                            prints(outstream, ESC_SEQ_BELL);
+                            fprintf(outstream, ESC_SEQ_BELL);
+                        
                         break;
                     case 'D': //left
                         if (curpos>0) {
+                            
                             curpos--;
-                            prints(outstream, ESC_SEQ_LEFT);
+                            
+                            //not necessary
+                            /*
+                            clrws(ws);
+                            ioctl(fileno(outstream), TIOCGWINSZ, &ws);
+                            if (((strlen(pt->prompttext)+curpos+1)%ws.ws_col)==0)
+                                fprintf(outstream, ESC_SEQ_RIGHT_N ESC_SEQ_UP,ws.ws_col-1);
+                            else */
+                                fprintf(outstream, ESC_SEQ_LEFT);
                         }
                         else
-                            prints(outstream, ESC_SEQ_BELL);
+                            fprintf(outstream, ESC_SEQ_BELL);
                         break;
                         
                     default:
@@ -191,13 +209,11 @@ unsigned long prompt(prompt_t *pt) {
                 curpos--;
                 len--;
                 removechar(buffer,curpos);
-                prints(outstream, ESC_SEQ_LEFT);
-                prints(outstream, buffer+curpos);
-                prints(outstream, " ");
-                printsn(outstream, ESC_SEQ_LEFT,len-curpos+1);
+                fprintf(outstream, ESC_SEQ_LEFT "%s" " " ESC_SEQ_LEFT_N,buffer+curpos,(unsigned int)(len-curpos+1));
+
             }
             else
-                prints(outstream, ESC_SEQ_BELL);
+                fprintf(outstream, ESC_SEQ_BELL);
         }
         else if ((ch=='\n')||(ch=='\r'))
             break;
@@ -206,24 +222,20 @@ unsigned long prompt(prompt_t *pt) {
                 buffer_size+=BUFFERSIZE*sizeof(char);
                 buffer=realloc(buffer,buffer_size);
             }
-            //if ((len+1)<size) {
-                curpos++;
-                len++;
-                insertchar(buffer,ch,curpos-1,buffer_size);
-                prints(outstream, buffer+curpos-1);
-                printsn(outstream, ESC_SEQ_LEFT,len-curpos);
-            /*}
-            else
-                prints(outstream, ESC_SEQ_BELL);*/
+            curpos++;
+            len++;
+            insertchar(buffer,ch,curpos-1,buffer_size);
+            fprintf(outstream, "%s", buffer+curpos-1);
+            if ((len-curpos)>0)
+                fprintf(outstream, ESC_SEQ_LEFT_N, (unsigned int)(len-curpos));
             
         }
         
     }
     while ((ch!='\n')&&(ch!='\r'));
-    
-    tcsetattr(fninstream, TCSANOW, &oldterm);
 
-    buffer[len]='\0';
+
+    buffer[len]='\0'; //safety
 
     for(i=0;i<history_size+1;i++)
         free(history_tmp[i]);
@@ -239,9 +251,12 @@ unsigned long prompt(prompt_t *pt) {
     pt->buffer_size=buffer_size;
     pt->history=history;
     pt->history_size=history_size;
+    pt->curpos=curpos;
 
-
-    prints(outstream, "\n\r");
+    fprintf(outstream, "\n\r");
+    
+    tcsetattr(fileno(instream), TCSANOW, &oldterm);
+    
     return len;
 }
 

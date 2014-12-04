@@ -33,11 +33,14 @@ int main(int argc, const char * argv[]) {
 
     
     prompt_init(&pt);
-    while (strcmp(pt.buffer,"quit")) {
+    prompt_setlabel(&pt, "shell> ");
+    do {
         prompt_clear(&pt);
         if (prompt(&pt))
-            printf("%s\n",prompt_get(&pt));
+            system(prompt_getinput(&pt));
+            //printf("%s\n",prompt_getinput(&pt));
     }
+    while (strcmp(prompt_getinput(&pt),"quit"));
     prompt_destroy(&pt);
     return 0;
 }
