@@ -2,7 +2,7 @@
 
 ##### A lightweight GNU readline alternative written in C
 
-- easy to compile
+- easy to compile, no dependencies
 - input history support
 - posix conform, works with Mac OS X, Linux and BSD
 - 2-Clause BSD License
