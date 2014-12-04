@@ -21,18 +21,18 @@ int main(int argc, const char * argv[]) {
     char *result=NULL;
     
     prompt_init(&pt);
-
+    
     do {
         
         prompt_clear(&pt);
-        
         result=prompt(&pt,"shell> ");
         
         if (result!=NULL) {
-            
             prompt_addhistory(&pt,result);
             system(result);
         }
+        else
+            continue; //no probs with strcmp if result equal NULL
         
     } while (strcmp(result,"exit"));
     
