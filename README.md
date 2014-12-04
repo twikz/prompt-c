@@ -16,17 +16,28 @@
 #include "prompt.h"
 
 int main(int argc, const char * argv[]) {
+    
     prompt_t pt;
-
+    char *result=NULL;
+    
     prompt_init(&pt);
-    prompt_setlabel(&pt, "shell> ");
+
     do {
+        
         prompt_clear(&pt);
-        if (prompt(&pt))
-            system(prompt_getinput(&pt));
-    }
-    while (strcmp(prompt_getinput(&pt),"quit"));
+        
+        result=prompt(&pt,"shell> ");
+        
+        if (result!=NULL) {
+            
+            prompt_addhistory(&pt,result);
+            system(result);
+        }
+        
+    } while (strcmp(result,"exit"));
+    
     prompt_destroy(&pt);
+    
     return 0;
 }
 ```
