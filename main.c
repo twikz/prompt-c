@@ -27,19 +27,19 @@ int main(int argc, const char * argv[]) {
     
     prompt_init(&pt);
     
-    do {
+    for (; ; ) {
         
         prompt_clear(&pt);
         result=prompt(&pt,"shell> ");
         
         if (result!=NULL) {
+            if (!strcmp(result,"exit")) break;
             prompt_addhistory(&pt,result);
             system(result);
         }
-        else
-            continue; //no probs with strcmp
+
         
-    } while (strcmp(result,"exit"));
+    }
     
     prompt_destroy(&pt);
     
