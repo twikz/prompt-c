@@ -18,24 +18,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 #include "prompt.h"
 
 int main(int argc, const char * argv[]) {
     
     prompt_t pt;
-    char *result=NULL;
+    wchar_t *result=NULL;
     
     prompt_init(&pt);
     
     for (; ; ) {
         
         prompt_clear(&pt);
-        result=prompt(&pt,"shell> ");
+        result=prompt_wc(&pt,L"shell> ");
         
         if (result!=NULL) {
-            if (!strcmp(result,"exit")) break;
-            prompt_addhistory(&pt,result);
-            system(result);
+            if (!wcscmp(result,L"exit")) break;
+            prompt_addhistory_wc(&pt,result);
+            printf("%ls\n",result);
+            //system(result);
         }
 
         

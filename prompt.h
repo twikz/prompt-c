@@ -14,23 +14,23 @@
  
  */
 
-#include <stdio.h>
-
 #ifndef CMDLINEPROMPT_H
 #define CMDLINEPROMPT_H
 
+#include <wchar.h>
 
 typedef struct __prompt_t {
-    char **history;
+    wchar_t **history;
     unsigned long histsize;
-    char *buffer;
+    wchar_t *buffer;
+    char *chbuffer;
     unsigned long buffsize;
     unsigned long curpos;
     unsigned long histpos;
-    char *label;
+    wchar_t *label;
     FILE *instream;
     FILE *outstream;
-    char **history_tmp;
+    wchar_t **history_tmp;
 }
 prompt_t;
 
@@ -42,11 +42,12 @@ prompt_t;
 //#define prompt_sethistory(__pt, __histpos) (__pt)->histpos=__histpos //segfault if history[histsize+1]
 #define prompt_gethistory(__pt) (__pt)->histpos
 
-extern char * prompt(prompt_t *__pt, char *__label);
+
+extern wchar_t *prompt_wc(prompt_t *__pt, wchar_t *__label);
 extern void prompt_init(prompt_t *__pt);
 extern void prompt_destroy(prompt_t *__pt);
-extern void prompt_setinput(prompt_t *__pt, char *__input);
-extern void prompt_addhistory(prompt_t *__pt, char *__entry);
+extern void prompt_setinput_wc(prompt_t *__pt, wchar_t *__input);
+extern void prompt_addhistory_wc(prompt_t *__pt, wchar_t *__entry);
 extern void prompt_clear(prompt_t *__pt);
 
 #endif // CMDLINEPROMPT_H

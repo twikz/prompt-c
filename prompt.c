@@ -21,28 +21,31 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <wchar.h>
+#include <locale.h>
+#include <limits.h>
 #include "prompt.h"
 
-static char *insertchar(char *str, char ch, unsigned long pos, unsigned long size) {
+static wchar_t *insertwchar(wchar_t *str, wchar_t ch, unsigned long pos, unsigned long size) {
     unsigned long i;
-    unsigned long len = strlen(str);
+    unsigned long len = wcslen(str);
     if (((size-len) < 2)||(pos > len)) return NULL;
     for (i=len; i>pos; i--) {
         str[i] = str[i-1];
     }
     str[pos]=ch;
-    str[len+1]='\0';
+    str[len+1]=L'\0';
     
     return str;
 }
 
-static char *removechar(char *str, unsigned long pos) {
-    unsigned long len = strlen(str);
+static wchar_t *removewchar(wchar_t *str, unsigned long pos) {
+    unsigned long len = wcslen(str);
     unsigned long i;
     for (i=pos; i<len-1; i++) {
         str[i] = str[i+1];
     }
-    str[len-1] = '\0';
+    str[len-1] = L'\0';
     
     return str;
 }
@@ -58,12 +61,12 @@ static char *removechar(char *str, unsigned long pos) {
 
 #define BUFFERSIZE 8
 
-static char label[] = "> ";
+static wchar_t label[] = L"> ";
 
 void prompt_init(prompt_t *pt) {
-    pt->buffsize = BUFFERSIZE*sizeof(char);
-    pt->buffer = malloc(pt->buffsize);
-    memset(pt->buffer, 0, pt->buffsize);
+    pt->buffsize = BUFFERSIZE;
+    pt->buffer = malloc(pt->buffsize*sizeof(wchar_t));
+    memset(pt->buffer, 0, pt->buffsize*sizeof(wchar_t));
     pt->history = NULL;
     pt->histsize = 0;
     pt->label = label;
@@ -71,8 +74,9 @@ void prompt_init(prompt_t *pt) {
     pt->outstream = stdout;
     pt->curpos = 0;
     pt->histpos = pt->histsize;
-    pt->history_tmp = malloc((pt->histsize+1)*sizeof(char*));
-    memset(pt->history_tmp,0,(pt->histsize+1)*sizeof(char*));
+    pt->history_tmp = malloc((pt->histsize+1)*sizeof(wchar_t*));
+    memset(pt->history_tmp,0,(pt->histsize+1)*sizeof(wchar_t*));
+    pt->chbuffer=NULL;
 }
 
 void prompt_destroy(prompt_t *pt) {
@@ -87,34 +91,35 @@ void prompt_destroy(prompt_t *pt) {
     free(pt->buffer);
 }
 
-void prompt_setinput(prompt_t *pt, char *input) {
-    unsigned long len = strlen(input);
+void prompt_setinput_wc(prompt_t *pt, wchar_t *input) {
+    unsigned long len = wcslen(input);
     if ((len+1)>pt->buffsize)
-        pt->buffer=realloc(pt->buffer, (len+1)*sizeof(char));
-    pt->buffsize=(len+1)*sizeof(char);
-    strcpy(pt->buffer, input);
+        pt->buffer=realloc(pt->buffer, (len+1)*sizeof(wchar_t));
+    pt->buffsize=len+1;
+    wcscpy(pt->buffer, input);
     pt->curpos=len;
 }
 
-void prompt_addhistory(prompt_t *pt, char *entry) {
+void prompt_addhistory_wc(prompt_t *pt, wchar_t *entry) {
     pt->histsize++;
-    pt->history=realloc(pt->history,pt->histsize*sizeof(char*));
-    pt->history[pt->histsize-1]=malloc((strlen(pt->buffer)+1)*sizeof(char));
-    strcpy(pt->history[pt->histsize-1], pt->buffer);
-    pt->history_tmp=realloc(pt->history_tmp ,(pt->histsize+1)*sizeof(char*));
+    pt->history=realloc(pt->history,pt->histsize*sizeof(wchar_t*));
+    pt->history[pt->histsize-1]=malloc((wcslen(entry)+1)*sizeof(wchar_t));
+    wcscpy(pt->history[pt->histsize-1], entry);
+    
+    pt->history_tmp=realloc(pt->history_tmp ,(pt->histsize+1)*sizeof(wchar_t*));
     pt->history_tmp[pt->histsize]=pt->history_tmp[pt->histsize-1]; //swap
-    pt->history_tmp[pt->histsize-1]=malloc((strlen(pt->buffer)+1)*sizeof(char));
-    strcpy(pt->history_tmp[pt->histsize-1], pt->buffer);
+    pt->history_tmp[pt->histsize-1]=malloc((wcslen(entry)+1)*sizeof(wchar_t));
+    wcscpy(pt->history_tmp[pt->histsize-1], entry);
 }
 
 void prompt_clear(prompt_t *pt) {
     unsigned long i;
-    memset(pt->buffer, 0, pt->buffsize);
+    memset(pt->buffer, 0, pt->buffsize*sizeof(wchar_t));
     pt->curpos=0;
     pt->histpos=pt->histsize;
     for (i=0; i<(pt->histsize+1); i++)
         free(pt->history_tmp[i]);
-    memset(pt->history_tmp, 0, (pt->histsize+1)*sizeof(char*));
+    memset(pt->history_tmp, 0, (pt->histsize+1)*sizeof(wchar_t*));
 }
 
 #define clrws(__ws)  do { \
@@ -124,18 +129,21 @@ void prompt_clear(prompt_t *pt) {
                         __ws.ws_ypixel=0; \
                     } while(0)
 
-char * prompt(prompt_t *pt, char *label) {
+wchar_t * prompt_wc(prompt_t *pt, wchar_t *label) {
     struct termios oldterm, newterm;
     char ch;
-    char *buffer = pt->buffer, **history=pt->history, **history_tmp=pt->history_tmp;
-    unsigned long curpos=pt->curpos,len=strlen(buffer), histpos=pt->histpos;
+    wchar_t wch;
+    wchar_t *buffer = pt->buffer, **history=pt->history, **history_tmp=pt->history_tmp;
+    unsigned long curpos=pt->curpos,len=wcslen(buffer), histpos=pt->histpos;
     unsigned long buffsize=pt->buffsize, histsize=pt->histsize;
     FILE *instream=pt->instream, *outstream=pt->outstream;
     struct winsize ws;
+    char *localenv = setlocale(LC_CTYPE, NULL); //retrieve local env
+    mbstate_t mbs;
     
     pt->label=(label!=NULL)? label : pt->label;
     
-    fprintf(outstream, "%s%s", pt->label, buffer);
+    fprintf(outstream, "%ls%ls", pt->label, buffer);
     if ((len-curpos) > 0)
         fprintf(outstream, ESC_SEQ_LEFT_N, (unsigned int)(len-curpos));
 
@@ -143,9 +151,16 @@ char * prompt(prompt_t *pt, char *label) {
     newterm = oldterm;
     newterm.c_lflag &= (~ICANON)&(~ECHO);
     tcsetattr(fileno(instream), TCSANOW, &newterm);
-
+    
+    
+    mbrlen(NULL, 0, &mbs);
+    setlocale(LC_CTYPE, "");
+    
     for (; ; ) {
         ch = fgetc(instream);
+        if (mbrtowc(&wch, &ch, 1, &mbs) != 1) continue;
+        
+        
         if (ch==0x1b) { //esc sequence
             if (fgetc(instream)=='[') {
                 switch (fgetc(instream)) {
@@ -156,17 +171,17 @@ char * prompt(prompt_t *pt, char *label) {
                             break;
                         }
                         
-                        history_tmp[histpos] = realloc(history_tmp[histpos], (strlen(buffer)+1)*sizeof(char));
-                        strcpy(history_tmp[histpos], buffer);
-                        strcpy(buffer,history_tmp[histpos-1]? history_tmp[histpos-1] : history[histpos-1]);
+                        history_tmp[histpos] = realloc(history_tmp[histpos], (wcslen(buffer)+1)*sizeof(wchar_t));
+                        wcscpy(history_tmp[histpos], buffer);
+                        wcscpy(buffer,history_tmp[histpos-1]? history_tmp[histpos-1] : history[histpos-1]);
 
                         histpos--;
                         if (curpos > 0)
                             fprintf(outstream, ESC_SEQ_LEFT_N, (unsigned int)curpos);
-                        fprintf(outstream, "%s" ESC_SEQ_ERASE, buffer);
+                        fprintf(outstream, "%ls" ESC_SEQ_ERASE, buffer);
                         
-                        curpos=strlen(buffer);
-                        len=strlen(buffer);
+                        curpos=wcslen(buffer);
+                        len=wcslen(buffer);
                         break;
                     case 'B': //down
                         if (histpos == histsize) {
@@ -174,18 +189,18 @@ char * prompt(prompt_t *pt, char *label) {
                             break;
                         }
                         
-                        history_tmp[histpos] = realloc(history_tmp[histpos], (strlen(buffer)+1)*sizeof(char));
-                        strcpy(history_tmp[histpos], buffer);
-                        strcpy(buffer,history_tmp[histpos+1]? history_tmp[histpos+1] : history[histpos+1]); //segfault
+                        history_tmp[histpos] = realloc(history_tmp[histpos], (wcslen(buffer)+1)*sizeof(wchar_t));
+                        wcscpy(history_tmp[histpos], buffer);
+                        wcscpy(buffer,history_tmp[histpos+1]? history_tmp[histpos+1] : history[histpos+1]); //segfault
 
 
                         histpos++;
                         if (curpos > 0)
                             fprintf(outstream, ESC_SEQ_LEFT_N, (unsigned int)curpos);
-                        fprintf(outstream, "%s" ESC_SEQ_ERASE, buffer);
+                        fprintf(outstream, "%ls" ESC_SEQ_ERASE, buffer);
                         
-                        curpos=strlen(buffer);
-                        len=strlen(buffer);
+                        curpos=wcslen(buffer);
+                        len=wcslen(buffer);
                         
                         break;
                     case 'C': //right
@@ -195,7 +210,7 @@ char * prompt(prompt_t *pt, char *label) {
                             
                             clrws(ws);
                             ioctl(fileno(outstream), TIOCGWINSZ, &ws);
-                            if (((strlen(pt->label)+curpos)%ws.ws_col)==0)
+                            if (((wcslen(pt->label)+curpos)%ws.ws_col)==0)
                                 fprintf(outstream, ESC_SEQ_LEFT_N ESC_SEQ_DOWN,ws.ws_col-1);
                             else
                                 fprintf(outstream, ESC_SEQ_RIGHT);
@@ -231,37 +246,36 @@ char * prompt(prompt_t *pt, char *label) {
             if (curpos) {
                 curpos--;
                 len--;
-                removechar(buffer,curpos);
-                fprintf(outstream, ESC_SEQ_LEFT "%s" " " ESC_SEQ_LEFT_N,buffer+curpos,(unsigned int)(len-curpos+1));
+                removewchar(buffer,curpos);
+                fprintf(outstream, ESC_SEQ_LEFT "%ls" " " ESC_SEQ_LEFT_N,&buffer[curpos],(unsigned int)(len-curpos+1));
 
             }
             else
                 fprintf(outstream, ESC_SEQ_BELL);
         }
-        else if ((ch=='\n')||(ch=='\r'))
+        else if ((wch==L'\n')||(wch==L'\r'))
             break;
         else {
             if ((len+1)>=buffsize) {
-                buffsize+=BUFFERSIZE*sizeof(char);
-                buffer=realloc(buffer,buffsize);
+                buffsize+=BUFFERSIZE;
+                buffer=realloc(buffer,buffsize*sizeof(wchar_t));
             }
             curpos++;
             len++;
-            insertchar(buffer,ch,curpos-1,buffsize);
-            fprintf(outstream, "%s", buffer+curpos-1);
+            insertwchar(buffer,wch,curpos-1,buffsize);
+            fprintf(outstream, "%ls", &buffer[curpos-1]);
             if ((len-curpos)>0)
                 fprintf(outstream, ESC_SEQ_LEFT_N, (unsigned int)(len-curpos));
             
         }
         
     }
-    while ((ch!='\n')&&(ch!='\r'));
 
-    buffer[len]='\0'; //safety
+    buffer[len]=L'\0'; //safety
     
-    history_tmp[histpos] = realloc(history_tmp[histpos], (strlen(buffer)+1)*sizeof(char));
-    strcpy(history_tmp[histpos], buffer);
-
+    history_tmp[histpos] = realloc(history_tmp[histpos], (wcslen(buffer)+1)*sizeof(wchar_t));
+    wcscpy(history_tmp[histpos], buffer);
+    
     pt->buffer=buffer;
     pt->buffsize=buffsize;
     pt->curpos=curpos;
@@ -271,6 +285,8 @@ char * prompt(prompt_t *pt, char *label) {
     fprintf(outstream, "\n\r");
     
     tcsetattr(fileno(instream), TCSANOW, &oldterm);
+    
+    setlocale(LC_CTYPE, localenv); //restore local env
     
     return ((len>0) ? buffer : NULL);
 }
