@@ -50,6 +50,29 @@ static wchar_t *removewchar(wchar_t *str, unsigned long pos) {
     return str;
 }
 
+static wchar_t fgetwchar(FILE *instream) {
+    wchar_t wch;
+    char ch;
+    mbstate_t mbs;
+    char *localenv = setlocale(LC_CTYPE, NULL); //retrieve local env
+    
+    setlocale(LC_CTYPE, ""); //set local env
+    memset (&mbs,0,sizeof(mbs));
+    
+    for (; ; ) {
+        
+        ch = fgetc(instream);
+        if (mbrtowc(&wch, &ch, 1, &mbs) == 1)
+            break;
+        else
+            continue;
+    }
+    
+    setlocale(LC_CTYPE, localenv); //restore local env
+    
+    return wch;
+}
+
 #define ESC_SEQ_UP      "\x1b[A"
 #define ESC_SEQ_DOWN    "\x1b[B"
 #define ESC_SEQ_RIGHT   "\x1b[C"
@@ -138,7 +161,6 @@ void prompt_clear(prompt_t *pt) {
 
 wchar_t * prompt_wc(prompt_t *pt, const wchar_t *label) {
     struct termios oldterm, newterm;
-    char ch;
     wchar_t wch;
     wchar_t *buffer = pt->buffer, **history=pt->history, **history_tmp=pt->history_tmp;
     unsigned long curpos=pt->curpos,len=wcslen(buffer), histpos=pt->histpos;
@@ -146,12 +168,11 @@ wchar_t * prompt_wc(prompt_t *pt, const wchar_t *label) {
     FILE *instream=pt->instream, *outstream=pt->outstream;
     struct winsize ws;
     char *localenv = setlocale(LC_CTYPE, NULL); //retrieve local env
-    mbstate_t mbs;
+    
+    setlocale(LC_CTYPE, "");
 
-    if (label) {
-        pt->label=realloc(pt->label, (wcslen(label)+1)*sizeof(wchar_t));
-        wcscpy(pt->label, label);
-    }
+    if (label)
+        prompt_setlabel_wc(pt, label);
     
     fprintf(outstream, "%ls%ls", pt->label, buffer);
     if ((len-curpos) > 0)
@@ -162,22 +183,17 @@ wchar_t * prompt_wc(prompt_t *pt, const wchar_t *label) {
     newterm.c_lflag &= (~ICANON)&(~ECHO);
     tcsetattr(fileno(instream), TCSANOW, &newterm);
     
-    
-    setlocale(LC_CTYPE, "");
-    
-    memset (&mbs,0,sizeof(mbs));
-    
     for (; ; ) {
 
-        ch = fgetc(instream);
-        if (mbrtowc(&wch, &ch, 1, &mbs) != 1) continue;
+        wch = fgetwchar(instream);
         
+        if (wch==L'\t') wch = L' ';
         
-        if (ch==0x1b) { //esc sequence
-            if (fgetc(instream)=='[') {
-                switch (fgetc(instream)) {
+        if (wch==L'\x1b') { //esc sequence
+            if (fgetwchar(instream)=='[') {
+                switch (fgetwchar(instream)) {
                     
-                    case 'A': //up
+                    case L'A': //up
                         if (histpos == 0) {
                             fprintf(outstream, ESC_SEQ_BELL);
                             break;
@@ -196,7 +212,7 @@ wchar_t * prompt_wc(prompt_t *pt, const wchar_t *label) {
                         curpos=wcslen(buffer);
                         len=wcslen(buffer);
                         break;
-                    case 'B': //down
+                    case L'B': //down
                         if (histpos == histsize) {
                             fprintf(outstream, ESC_SEQ_BELL);
                             break;
@@ -216,7 +232,7 @@ wchar_t * prompt_wc(prompt_t *pt, const wchar_t *label) {
                         len=wcslen(buffer);
                         
                         break;
-                    case 'C': //right
+                    case L'C': //right
                         if (curpos<len) {
                             
                             curpos++;
@@ -232,7 +248,7 @@ wchar_t * prompt_wc(prompt_t *pt, const wchar_t *label) {
                             fprintf(outstream, ESC_SEQ_BELL);
                         
                         break;
-                    case 'D': //left
+                    case L'D': //left
                         if (curpos>0) {
                             
                             curpos--;
@@ -255,7 +271,7 @@ wchar_t * prompt_wc(prompt_t *pt, const wchar_t *label) {
                 }
             }
         }
-        else if (ch==0x7f) {
+        else if (wch==L'\x7f') { //delete / backspace
             if (curpos) {
                 curpos--;
                 len--;
