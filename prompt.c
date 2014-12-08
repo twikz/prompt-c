@@ -128,20 +128,7 @@ void prompt_setinput_wc(prompt_t *pt, const wchar_t *input) {
 
 void prompt_addhistory_wc(prompt_t *pt, const wchar_t *entry) {
     pt->histsize++;
-<<<<<<< Updated upstream
-    
-=======
-<<<<<<< HEAD
-<<<<<<< HEAD
-    pt->history=realloc(pt->history,pt->histsize*sizeof(char*));
-    pt->history[pt->histsize-1]=malloc((strlen(entry)+1)*sizeof(char));
-    strcpy(pt->history[pt->histsize-1], entry);
-    pt->history_tmp=realloc(pt->history_tmp ,(pt->histsize+1)*sizeof(char*));
-    pt->history_tmp[pt->histsize]=pt->history_tmp[pt->histsize-1]; //swap
-    pt->history_tmp[pt->histsize-1]=malloc((strlen(entry)+1)*sizeof(char));
-    strcpy(pt->history_tmp[pt->histsize-1], entry);
-=======
->>>>>>> Stashed changes
+
     pt->history=realloc(pt->history,pt->histsize*sizeof(wchar_t*));
     pt->history[pt->histsize-1]=malloc((wcslen(entry)+1)*sizeof(wchar_t));
     wcscpy(pt->history[pt->histsize-1], entry);
@@ -150,20 +137,7 @@ void prompt_addhistory_wc(prompt_t *pt, const wchar_t *entry) {
     pt->history_tmp[pt->histsize]=pt->history_tmp[pt->histsize-1]; //swap
     pt->history_tmp[pt->histsize-1]=malloc((wcslen(entry)+1)*sizeof(wchar_t));
     wcscpy(pt->history_tmp[pt->histsize-1], entry);
-<<<<<<< Updated upstream
-=======
->>>>>>> wchar-implementation
-=======
-    pt->history=realloc(pt->history,pt->histsize*sizeof(wchar_t*));
-    pt->history[pt->histsize-1]=malloc((wcslen(entry)+1)*sizeof(wchar_t));
-    wcscpy(pt->history[pt->histsize-1], entry);
-    
-    pt->history_tmp=realloc(pt->history_tmp ,(pt->histsize+1)*sizeof(wchar_t*));
-    pt->history_tmp[pt->histsize]=pt->history_tmp[pt->histsize-1]; //swap
-    pt->history_tmp[pt->histsize-1]=malloc((wcslen(entry)+1)*sizeof(wchar_t));
-    wcscpy(pt->history_tmp[pt->histsize-1], entry);
->>>>>>> wchar-implementation
->>>>>>> Stashed changes
+
 }
 
 void prompt_clear(prompt_t *pt) {
