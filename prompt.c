@@ -99,12 +99,12 @@ void prompt_setinput(prompt_t *pt, char *input) {
 void prompt_addhistory(prompt_t *pt, char *entry) {
     pt->histsize++;
     pt->history=realloc(pt->history,pt->histsize*sizeof(char*));
-    pt->history[pt->histsize-1]=malloc((strlen(pt->buffer)+1)*sizeof(char));
-    strcpy(pt->history[pt->histsize-1], pt->buffer);
+    pt->history[pt->histsize-1]=malloc((strlen(entry)+1)*sizeof(char));
+    strcpy(pt->history[pt->histsize-1], entry);
     pt->history_tmp=realloc(pt->history_tmp ,(pt->histsize+1)*sizeof(char*));
     pt->history_tmp[pt->histsize]=pt->history_tmp[pt->histsize-1]; //swap
-    pt->history_tmp[pt->histsize-1]=malloc((strlen(pt->buffer)+1)*sizeof(char));
-    strcpy(pt->history_tmp[pt->histsize-1], pt->buffer);
+    pt->history_tmp[pt->histsize-1]=malloc((strlen(entry)+1)*sizeof(char));
+    strcpy(pt->history_tmp[pt->histsize-1], entry);
 }
 
 void prompt_clear(prompt_t *pt) {
