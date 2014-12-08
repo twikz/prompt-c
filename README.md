@@ -4,6 +4,7 @@
 
 - easy to compile, no dependencies
 - input history support
+- full unicode transformation support (e.g. UTF-8)
 - posix conform, works with Mac OS X, Linux and BSD
 - 2-Clause BSD License
 
