@@ -128,7 +128,6 @@ void prompt_setinput_wc(prompt_t *pt, const wchar_t *input) {
 
 void prompt_addhistory_wc(prompt_t *pt, const wchar_t *entry) {
     pt->histsize++;
-
     pt->history=realloc(pt->history,pt->histsize*sizeof(wchar_t*));
     pt->history[pt->histsize-1]=malloc((wcslen(entry)+1)*sizeof(wchar_t));
     wcscpy(pt->history[pt->histsize-1], entry);
@@ -137,7 +136,6 @@ void prompt_addhistory_wc(prompt_t *pt, const wchar_t *entry) {
     pt->history_tmp[pt->histsize]=pt->history_tmp[pt->histsize-1]; //swap
     pt->history_tmp[pt->histsize-1]=malloc((wcslen(entry)+1)*sizeof(wchar_t));
     wcscpy(pt->history_tmp[pt->histsize-1], entry);
-
 }
 
 void prompt_clear(prompt_t *pt) {
