@@ -37,7 +37,7 @@ int main(int argc, const char * argv[]) {
             if (!strcmp(result,"exit")) break;
             prompt_addhistory(&pt,result);
             printf("%s\n",result);
-            //system(result);
+            system(result);
         }
 
         
