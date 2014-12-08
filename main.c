@@ -24,19 +24,19 @@
 int main(int argc, const char * argv[]) {
     
     prompt_t pt;
-    wchar_t *result=NULL;
+    char *result=NULL;
     
     prompt_init(&pt);
     
     for (; ; ) {
         
         prompt_clear(&pt);
-        result=prompt_wc(&pt,L"shell> ");
+        result=prompt(&pt,"shell>");
         
         if (result!=NULL) {
-            if (!wcscmp(result,L"exit")) break;
-            prompt_addhistory_wc(&pt,result);
-            printf("%ls\n",result);
+            if (!strcmp(result,"exit")) break;
+            prompt_addhistory(&pt,result);
+            printf("%s\n",result);
             //system(result);
         }
 

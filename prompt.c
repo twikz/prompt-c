@@ -61,7 +61,7 @@ static wchar_t *removewchar(wchar_t *str, unsigned long pos) {
 
 #define BUFFERSIZE 8
 
-static wchar_t label[] = L"> ";
+static const wchar_t defaultlabel[] = L"> ";
 
 void prompt_init(prompt_t *pt) {
     pt->buffsize = BUFFERSIZE;
@@ -69,7 +69,8 @@ void prompt_init(prompt_t *pt) {
     memset(pt->buffer, 0, pt->buffsize*sizeof(wchar_t));
     pt->history = NULL;
     pt->histsize = 0;
-    pt->label = label;
+    pt->label = malloc((wcslen(defaultlabel)+1)*sizeof(wchar_t));
+    wcscpy(pt->label, defaultlabel);
     pt->instream = stdin;
     pt->outstream = stdout;
     pt->curpos = 0;
@@ -89,9 +90,11 @@ void prompt_destroy(prompt_t *pt) {
         free(pt->history_tmp[i]);
     free(pt->history_tmp);
     free(pt->buffer);
+    free(pt->chbuffer);
+    free(pt->label);
 }
 
-void prompt_setinput_wc(prompt_t *pt, wchar_t *input) {
+void prompt_setinput_wc(prompt_t *pt, const wchar_t *input) {
     unsigned long len = wcslen(input);
     if ((len+1)>pt->buffsize)
         pt->buffer=realloc(pt->buffer, (len+1)*sizeof(wchar_t));
@@ -100,7 +103,7 @@ void prompt_setinput_wc(prompt_t *pt, wchar_t *input) {
     pt->curpos=len;
 }
 
-void prompt_addhistory_wc(prompt_t *pt, wchar_t *entry) {
+void prompt_addhistory_wc(prompt_t *pt, const wchar_t *entry) {
     pt->histsize++;
     pt->history=realloc(pt->history,pt->histsize*sizeof(wchar_t*));
     pt->history[pt->histsize-1]=malloc((wcslen(entry)+1)*sizeof(wchar_t));
@@ -120,6 +123,10 @@ void prompt_clear(prompt_t *pt) {
     for (i=0; i<(pt->histsize+1); i++)
         free(pt->history_tmp[i]);
     memset(pt->history_tmp, 0, (pt->histsize+1)*sizeof(wchar_t*));
+    if (pt->chbuffer != NULL ) free(pt->chbuffer);
+    pt->chbuffer=NULL;
+    pt->label=realloc(pt->label, (wcslen(defaultlabel)+1)*sizeof(wchar_t));
+    wcscpy(pt->label, defaultlabel);
 }
 
 #define clrws(__ws)  do { \
@@ -129,7 +136,7 @@ void prompt_clear(prompt_t *pt) {
                         __ws.ws_ypixel=0; \
                     } while(0)
 
-wchar_t * prompt_wc(prompt_t *pt, wchar_t *label) {
+wchar_t * prompt_wc(prompt_t *pt, const wchar_t *label) {
     struct termios oldterm, newterm;
     char ch;
     wchar_t wch;
@@ -140,8 +147,11 @@ wchar_t * prompt_wc(prompt_t *pt, wchar_t *label) {
     struct winsize ws;
     char *localenv = setlocale(LC_CTYPE, NULL); //retrieve local env
     mbstate_t mbs;
-    
-    pt->label=(label!=NULL)? label : pt->label;
+
+    if (label) {
+        pt->label=realloc(pt->label, (wcslen(label)+1)*sizeof(wchar_t));
+        wcscpy(pt->label, label);
+    }
     
     fprintf(outstream, "%ls%ls", pt->label, buffer);
     if ((len-curpos) > 0)
@@ -153,10 +163,12 @@ wchar_t * prompt_wc(prompt_t *pt, wchar_t *label) {
     tcsetattr(fileno(instream), TCSANOW, &newterm);
     
     
-    mbrlen(NULL, 0, &mbs);
     setlocale(LC_CTYPE, "");
     
+    memset (&mbs,0,sizeof(mbs));
+    
     for (; ; ) {
+
         ch = fgetc(instream);
         if (mbrtowc(&wch, &ch, 1, &mbs) != 1) continue;
         
@@ -174,6 +186,7 @@ wchar_t * prompt_wc(prompt_t *pt, wchar_t *label) {
                         history_tmp[histpos] = realloc(history_tmp[histpos], (wcslen(buffer)+1)*sizeof(wchar_t));
                         wcscpy(history_tmp[histpos], buffer);
                         wcscpy(buffer,history_tmp[histpos-1]? history_tmp[histpos-1] : history[histpos-1]);
+                        //what happens if history bigger than buffer?
 
                         histpos--;
                         if (curpos > 0)
@@ -192,7 +205,7 @@ wchar_t * prompt_wc(prompt_t *pt, wchar_t *label) {
                         history_tmp[histpos] = realloc(history_tmp[histpos], (wcslen(buffer)+1)*sizeof(wchar_t));
                         wcscpy(history_tmp[histpos], buffer);
                         wcscpy(buffer,history_tmp[histpos+1]? history_tmp[histpos+1] : history[histpos+1]); //segfault
-
+                        //what happens if history bigger than buffer?
 
                         histpos++;
                         if (curpos > 0)
@@ -291,3 +304,42 @@ wchar_t * prompt_wc(prompt_t *pt, wchar_t *label) {
     return ((len>0) ? buffer : NULL);
 }
 
+char *prompt(prompt_t *pt, const char *label) {
+    char *localenv = setlocale(LC_CTYPE, NULL); //save local env
+    wchar_t *labelbuffer=malloc(sizeof(wchar_t)*(strlen(label)+1));
+    mbstate_t mbs;
+    const char *labelptr = label;
+    const wchar_t *bufferptr;
+    
+    setlocale(LC_CTYPE, ""); //set local env
+    
+    memset (&mbs,0,sizeof(mbs));
+    mbsrtowcs(labelbuffer, &labelptr, strlen(label)+1, &mbs);
+    prompt_wc(pt, labelbuffer);
+    free(labelbuffer);
+    bufferptr=pt->buffer;
+    
+    pt->chbuffer=realloc(pt->chbuffer, sizeof(char)*MB_LEN_MAX*(wcslen(pt->buffer)+1));
+    memset (&mbs,0,sizeof(mbs));
+    wcsrtombs(pt->chbuffer, &bufferptr, MB_LEN_MAX*(wcslen(pt->buffer)+1), &mbs);
+    
+    setlocale(LC_CTYPE, localenv); //restore local env
+    
+    return (strlen(pt->chbuffer) ? pt->chbuffer : NULL);
+}
+
+void prompt_addhistory(prompt_t *pt, const char *entry) {
+    char *localenv = setlocale(LC_CTYPE, NULL); //save local env
+    wchar_t *entrybuffer = malloc((strlen(entry)+1)*sizeof(wchar_t));
+    mbstate_t mbs;
+    const char *entryptr = entry;
+    
+    setlocale(LC_CTYPE, ""); //set local env
+    memset (&mbs,0,sizeof(mbs));
+    mbsrtowcs(entrybuffer, &entryptr, strlen(entry)+1, &mbs);
+    setlocale(LC_CTYPE, localenv); //restore local env
+    
+    prompt_addhistory_wc(pt, entrybuffer);
+    free(entrybuffer);
+    
+}
