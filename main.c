@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 #include "prompt.h"
 
 int main(int argc, const char * argv[]) {
@@ -30,12 +31,13 @@ int main(int argc, const char * argv[]) {
     for (; ; ) {
         
         prompt_clear(&pt);
-        result=prompt(&pt,"shell> ");
+        result=prompt(&pt,"shell>");
         
         if (result!=NULL) {
             if (!strcmp(result,"exit")) break;
             prompt_addhistory(&pt,result);
-            system(result);
+            printf("%s\n",result);
+            //system(result);
         }
 
         
